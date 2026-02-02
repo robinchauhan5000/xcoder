@@ -111,7 +111,7 @@ class _ContentViewState extends State<ContentView> {
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
-        child: isHiding ? _hiddenView() : _contentView(),
+        child: isHiding ? _hiddenView() : _hiddenView(),
       ),
     );
   }

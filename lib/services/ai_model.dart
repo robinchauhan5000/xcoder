@@ -15,6 +15,7 @@ abstract class AIModel {
   Future<Stream<StreamingInterviewResponse>> streamInterviewResponse(
     String prompt, {
     InterviewCategory category = InterviewCategory.normal,
+    bool includeOptionalCodePhase = false,
   }) {
     throw UnimplementedError('Streaming not implemented for this model');
   }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../models/interview_category.dart';
 import '../models/interview_response.dart';
+import '../models/streaming_response.dart';
 import '../services/interview_service.dart';
 import '../services/permission_service.dart';
 import '../services/speech_service.dart';
@@ -27,6 +28,9 @@ class _InterviewCopilotViewState extends State<InterviewCopilotView> {
   late InterviewService _interviewService;
   late SpeechService _speechService;
   bool _isLoading = false;
+  StreamSubscription<StreamingInterviewResponse>? _streamSubscription;
+  StreamController<StreamingInterviewResponse>? _streamController;
+  StreamingInterviewResponse? _latestStreamingResponse;
   bool _isHeaderMicListening = false;
   bool _isInputMicListening = false;
   bool _useStreaming = true; // Enable streaming by default
@@ -114,6 +118,8 @@ class _InterviewCopilotViewState extends State<InterviewCopilotView> {
   void dispose() {
     _inputController.dispose();
     _speechService.dispose();
+    _streamSubscription?.cancel();
+    _streamController?.close();
     super.dispose();
   }
 
@@ -150,10 +156,29 @@ class _InterviewCopilotViewState extends State<InterviewCopilotView> {
           category: _currentCategory,
         );
 
+        await _streamSubscription?.cancel();
+        await _streamController?.close();
+
+        _streamController =
+            StreamController<StreamingInterviewResponse>.broadcast();
+        _streamSubscription = stream.listen(
+          (event) {
+            _latestStreamingResponse = event;
+            _streamController?.add(event);
+          },
+          onError: (error, stackTrace) {
+            _streamController?.addError(error, stackTrace);
+          },
+          onDone: () {
+            _streamController?.close();
+          },
+          cancelOnError: true,
+        );
+
         setState(() {
           _messages.add(
             StreamingAssistantMessage(
-              responseStream: stream,
+              responseStream: _streamController!.stream,
               onComplete: (finalResponse) {
                 // Replace streaming message with final message
                 setState(() {
@@ -185,6 +210,32 @@ class _InterviewCopilotViewState extends State<InterviewCopilotView> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _stopStreaming() async {
+    if (!_isLoading || !_useStreaming) return;
+
+    await _streamSubscription?.cancel();
+    if (_streamController != null && _latestStreamingResponse != null) {
+      _streamController?.add(
+        _latestStreamingResponse!.copyWith(isComplete: true),
+      );
+    } else {
+      setState(() {
+        final index = _messages.length - 1;
+        if (index >= 0 && _messages[index] is StreamingAssistantMessage) {
+          _messages.removeAt(index);
+        }
+      });
+    }
+    await _streamController?.close();
+    _streamSubscription = null;
+    _streamController = null;
+    _latestStreamingResponse = null;
+
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   void _copyAllMessages() {
@@ -372,6 +423,24 @@ class _InterviewCopilotViewState extends State<InterviewCopilotView> {
                         fontSize: 12,
                       ),
                     ),
+                    if (_useStreaming) ...[
+                      const SizedBox(width: 12),
+                      TextButton(
+                        onPressed: _stopStreaming,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                        ),
+                        child: const Text(
+                          'Stop streaming',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -86,9 +86,13 @@ class OpenAIService extends AIModel {
   Future<Stream<StreamingInterviewResponse>> streamInterviewResponse(
     String prompt, {
     InterviewCategory category = InterviewCategory.normal,
+    bool includeOptionalCodePhase = false,
   }) async {
     if (category == InterviewCategory.systemDesign) {
-      return _streamPhasedSystemDesign(prompt);
+      return _streamPhasedSystemDesign(
+        prompt,
+        includeOptionalCodePhase: includeOptionalCodePhase,
+      );
     }
 
     final systemPrompt = PromptBuilder.buildSystemPrompt(category);
@@ -96,16 +100,33 @@ class OpenAIService extends AIModel {
   }
 
   Future<Stream<StreamingInterviewResponse>> _streamPhasedSystemDesign(
-    String prompt,
-  ) async {
-    final controller = StreamController<StreamingInterviewResponse>();
+    String prompt, {
+    required bool includeOptionalCodePhase,
+  }) async {
+    StreamSubscription<StreamingInterviewResponse>? phaseSub;
+    var cancelled = false;
+    late final StreamController<StreamingInterviewResponse> controller;
+    controller = StreamController<StreamingInterviewResponse>(
+      onCancel: () async {
+        cancelled = true;
+        await phaseSub?.cancel();
+        if (!controller.isClosed) {
+          await controller.close();
+        }
+      },
+    );
     final phaseSections = <int, List<ResponseSection>>{};
     var title = '';
     final baseSystemPrompt = PromptBuilder.buildSystemDesignBasePrompt();
+    final lastPhase =
+        includeOptionalCodePhase
+            ? PromptBuilder.systemDesignMaxPhase
+            : PromptBuilder.systemDesignOptionalCodePhase - 1;
 
     unawaited(() async {
       try {
-        for (var phase = 1; phase <= 4; phase++) {
+        for (var phase = 1; phase <= lastPhase; phase++) {
+          if (cancelled) break;
           final userPrompt = PromptBuilder.buildSystemDesignPhaseUserPrompt(
             phase: phase,
             question: prompt,
@@ -116,32 +137,55 @@ class OpenAIService extends AIModel {
             prompt: userPrompt,
           );
 
-          await for (final phaseResponse in phaseStream) {
-            if (title.isEmpty && phaseResponse.title.isNotEmpty) {
-              title = phaseResponse.title;
-            }
-            phaseSections[phase] = phaseResponse.sections;
-            controller.add(
-              StreamingInterviewResponse(
-                title: title,
-                sections: _mergePhaseSections(phaseSections),
-                isComplete: false,
-              ),
-            );
-          }
+          final phaseDone = Completer<void>();
+          phaseSub = phaseStream.listen(
+            (phaseResponse) {
+              if (cancelled) return;
+              if (title.isEmpty && phaseResponse.title.isNotEmpty) {
+                title = phaseResponse.title;
+              }
+              phaseSections[phase] = phaseResponse.sections;
+              controller.add(
+                StreamingInterviewResponse(
+                  title: title,
+                  sections: _mergePhaseSections(phaseSections),
+                  isComplete: false,
+                ),
+              );
+            },
+            onError: (error, stackTrace) {
+              if (!controller.isClosed) {
+                controller.addError(error, stackTrace);
+              }
+              if (!phaseDone.isCompleted) {
+                phaseDone.complete();
+              }
+            },
+            onDone: () {
+              if (!phaseDone.isCompleted) {
+                phaseDone.complete();
+              }
+            },
+            cancelOnError: true,
+          );
+          await phaseDone.future;
         }
 
-        controller.add(
-          StreamingInterviewResponse(
-            title: title,
-            sections: _mergePhaseSections(phaseSections),
-            isComplete: true,
-          ),
-        );
-        await controller.close();
+        if (!cancelled && !controller.isClosed) {
+          controller.add(
+            StreamingInterviewResponse(
+              title: title,
+              sections: _mergePhaseSections(phaseSections),
+              isComplete: true,
+            ),
+          );
+          await controller.close();
+        }
       } catch (e, st) {
-        controller.addError(e, st);
-        await controller.close();
+        if (!controller.isClosed) {
+          controller.addError(e, st);
+          await controller.close();
+        }
       }
     }());
 
@@ -196,9 +240,24 @@ class OpenAIService extends AIModel {
 
     // Create parser for incremental JSON parsing
     final parser = StreamingResponseParser();
+    StreamSubscription<String>? responseSub;
+    StreamSubscription<StreamingInterviewResponse>? parserSub;
+
+    late final StreamController<StreamingInterviewResponse> controller;
+    controller = StreamController<StreamingInterviewResponse>(
+      onCancel: () async {
+        await responseSub?.cancel();
+        await parserSub?.cancel();
+        client.close();
+        parser.dispose();
+        if (!controller.isClosed) {
+          await controller.close();
+        }
+      },
+    );
 
     // Convert byte stream → text → SSE lines → content tokens → parsed sections
-    response.stream
+    responseSub = response.stream
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .where((line) => line.startsWith('data: '))
@@ -237,6 +296,21 @@ class OpenAIService extends AIModel {
           cancelOnError: true,
         );
 
-    return parser.stream;
+    parserSub = parser.stream.listen(
+      (event) => controller.add(event),
+      onError: (error, stackTrace) {
+        if (!controller.isClosed) {
+          controller.addError(error, stackTrace);
+        }
+      },
+      onDone: () {
+        if (!controller.isClosed) {
+          controller.close();
+        }
+      },
+      cancelOnError: true,
+    );
+
+    return controller.stream;
   }
 }

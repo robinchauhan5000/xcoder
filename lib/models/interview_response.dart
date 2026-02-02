@@ -41,7 +41,32 @@ enum SectionType {
   alternativeApproaches('alternative_approaches'),
   tradeOffs('trade_offs'),
   scalability('scalability'),
-  considerations('considerations');
+  considerations('considerations'),
+  problemStatement('problem_statement'),
+  functionalRequirements('functional_requirements'),
+  nonFunctionalRequirements('non_functional_requirements'),
+  highLevelArchitectureOverview('high_level_architecture_overview'),
+  mainComponentsAndResponsibilities('main_components_and_responsibilities'),
+  highLevelDataFlow('high_level_data_flow'),
+  primaryWriteFlow('primary_write_flow'),
+  primaryReadFlow('primary_read_flow'),
+  backgroundOrAsynchronousFlow('background_or_asynchronous_flow'),
+  cachingStrategy('caching_strategy'),
+  loadBalancingStrategy('load_balancing_strategy'),
+  dataModelOverview('data_model_overview'),
+  databaseDesign('database_design'),
+  indexingStrategyAndReason('indexing_strategy_and_reason'),
+  dataGrowthAndStorageConsiderations(
+    'data_growth_and_storage_considerations',
+  ),
+  failureScenarios('failure_scenarios'),
+  failureHandling('failure_handling'),
+  degradedBehaviorAndFallbacks('degraded_behavior_and_fallbacks'),
+  scalingReadTraffic('scaling_read_traffic'),
+  scalingWriteTraffic('scaling_write_traffic'),
+  tradeOffsInDesignDecisions('trade_offs_in_design_decisions'),
+  veryLargeScaleChanges('very_large_scale_changes'),
+  coreBusinessLogic('core_business_logic');
 
   final String value;
   const SectionType(this.value);
@@ -55,7 +80,18 @@ enum SectionType {
 }
 
 extension SectionTypeDisplay on SectionType {
-  String get title => value;
+  String get title {
+    final words = value.split('_');
+    final titled = words
+        .map(
+          (word) =>
+              word.isEmpty
+                  ? word
+                  : '${word[0].toUpperCase()}${word.substring(1)}',
+        )
+        .join(' ');
+    return titled;
+  }
 
   bool get isCode => this == SectionType.code;
 
@@ -71,7 +107,30 @@ extension SectionTypeDisplay on SectionType {
       this == SectionType.alternativeApproaches ||
       this == SectionType.tradeOffs ||
       this == SectionType.scalability ||
-      this == SectionType.considerations;
+      this == SectionType.considerations ||
+      this == SectionType.problemStatement ||
+      this == SectionType.functionalRequirements ||
+      this == SectionType.nonFunctionalRequirements ||
+      this == SectionType.highLevelArchitectureOverview ||
+      this == SectionType.mainComponentsAndResponsibilities ||
+      this == SectionType.highLevelDataFlow ||
+      this == SectionType.primaryWriteFlow ||
+      this == SectionType.primaryReadFlow ||
+      this == SectionType.backgroundOrAsynchronousFlow ||
+      this == SectionType.cachingStrategy ||
+      this == SectionType.loadBalancingStrategy ||
+      this == SectionType.dataModelOverview ||
+      this == SectionType.databaseDesign ||
+      this == SectionType.indexingStrategyAndReason ||
+      this == SectionType.dataGrowthAndStorageConsiderations ||
+      this == SectionType.failureScenarios ||
+      this == SectionType.failureHandling ||
+      this == SectionType.degradedBehaviorAndFallbacks ||
+      this == SectionType.scalingReadTraffic ||
+      this == SectionType.scalingWriteTraffic ||
+      this == SectionType.tradeOffsInDesignDecisions ||
+      this == SectionType.veryLargeScaleChanges ||
+      this == SectionType.coreBusinessLogic;
 }
 
 /// Individual section in the response

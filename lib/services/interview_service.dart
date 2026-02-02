@@ -51,12 +51,17 @@ class InterviewService {
   Future<Stream<StreamingInterviewResponse>> askQuestionStream(
     String prompt, {
     InterviewCategory category = InterviewCategory.normal,
+    bool includeOptionalCodePhase = false,
   }) async {
     if (prompt.trim().isEmpty) {
       throw ArgumentError('Prompt cannot be empty');
     }
 
-    return await _aiModel.streamInterviewResponse(prompt, category: category);
+    return await _aiModel.streamInterviewResponse(
+      prompt,
+      category: category,
+      includeOptionalCodePhase: includeOptionalCodePhase,
+    );
   }
 
   /// Format response for display

@@ -2,6 +2,9 @@ import '../models/interview_category.dart';
 
 /// Builds system prompts for different interview categories
 class PromptBuilder {
+  static const int systemDesignMaxPhase = 8;
+  static const int systemDesignOptionalCodePhase = 8;
+
   /// Base JSON schema that all standard responses must follow
   static const String _jsonSchema = '''
 RESPONSE SCHEMA:
@@ -49,31 +52,27 @@ $categoryPrompt
   /// Base system prompt for system design (reused across phases)
   static String buildSystemDesignBasePrompt() {
     return '''
-You are answering a SYSTEM DESIGN INTERVIEW as a SENIOR SOFTWARE ENGINEER (7+ years).
-PRIMARY LANGUAGE: Golang (Go).
+You are answering a SYSTEM DESIGN INTERVIEW as a SENIOR SOFTWARE ENGINEER.
 
-ABSOLUTE RULES
-- Do not write paragraphs
-- Do not write sentences outside bullet points
-- Do not nest bullets
-- Do not omit required sections
-- Do not write stub code or placeholders
+LANGUAGE RULES (MANDATORY)
+- If a technical term is used, explain it in simple words
 
-FORMATTING RULES
-- All section titles must be bold
-- Titles must not use bullets
-- Use "-" for bullets only
-- Bullets must be short and diagram-friendly
+COMMUNICATION RULES
+- Write in clear, simple English
+- Answers must be understandable when read aloud
+- Avoid compressed phrases that require prior decoding
+- Prefer explanation over jargon
 
-FLOW RULES
-- diagram_flow is mandatory
-- Write, Read, Async flows required
-- Flows must use arrows only
+FORMAT RULES
+- Use clear section titles
+- Use bullet points only
+- One idea per bullet
+- No nested bullets
 
-CODE RULES
-- Golang only
-- Fully implemented logic
-- Real hashing, encoding, ID generation
+INTERVIEW STYLE
+- Explain concepts as if teaching another engineer
+- Prioritize clarity before optimization
+- Think step by step
 ''';
   }
 
@@ -91,28 +90,15 @@ RESPONSE SCHEMA:
 {
   "title": "string",
   "sections": [
-    { "type": "short_answer", "content": ["string"] },
-    { "type": "diagram_flow", "content": ["string"] },
-    { "type": "high_level_design", "content": ["string"] },
-    { "type": "detailed_design", "content": ["string"] },
-    { "type": "technology_choices", "content": ["string"] },
-    { "type": "api_contracts", "content": ["string"] },
-    { "type": "data_models", "content": ["string"] },
-    { "type": "algorithms", "content": ["string"] },
-    { "type": "code", "language": "go", "content": "string" },
-    { "type": "bottlenecks_and_mitigations", "content": ["string"] },
-    { "type": "alternative_approaches", "content": ["string"] },
-    { "type": "trade_offs", "content": ["string"] },
-    { "type": "scalability", "content": ["string"] },
-    { "type": "considerations", "content": ["string"] }
+${_getSystemDesignPhaseSchema(phase)}
   ]
 }
 
 CONTENT RULES:
 - Each bullet is a separate string in the content array
 - Do not include "-" in content strings
-- diagram_flow content must be arrow chains only
-- code must be complete, production-ready Go
+- Use complete sentences that are easy to read aloud
+- Do not mention sections that are not required in this phase
 
 PHASE $phase ONLY:
 ${_getSystemDesignPhaseRules(phase)}
@@ -130,44 +116,59 @@ RESPONSE SCHEMA:
 {
   "title": "string",
   "sections": [
-    { "type": "short_answer", "content": ["string"] },
-    { "type": "diagram_flow", "content": ["string"] },
-    { "type": "high_level_design", "content": ["string"] },
-    { "type": "detailed_design", "content": ["string"] },
-    { "type": "technology_choices", "content": ["string"] },
-    { "type": "api_contracts", "content": ["string"] },
-    { "type": "data_models", "content": ["string"] },
-    { "type": "algorithms", "content": ["string"] },
-    { "type": "code", "language": "go", "content": "string" },
-    { "type": "bottlenecks_and_mitigations", "content": ["string"] },
-    { "type": "alternative_approaches", "content": ["string"] },
-    { "type": "trade_offs", "content": ["string"] },
-    { "type": "scalability", "content": ["string"] },
-    { "type": "considerations", "content": ["string"] }
+    { "type": "problem_statement", "content": ["string"] },
+    { "type": "functional_requirements", "content": ["string"] },
+    { "type": "short_answer_high_level_architecture", "content": ["string"] },
+    { "type": "high_level_architecture_overview", "content": ["string"] },
+    { "type": "main_components_and_responsibilities", "content": ["string"] },
+    { "type": "high_level_data_flow", "content": ["string"] },
+    { "type": "primary_write_flow", "content": ["string"] },
+    { "type": "primary_read_flow", "content": ["string"] },
+    { "type": "background_or_asynchronous_flow", "content": ["string"] },
+    { "type": "caching_strategy", "content": ["string"] },
+    { "type": "load_balancing_strategy", "content": ["string"] },
+    { "type": "database_design", "content": ["string"] },
+    { "type": "data_growth_and_storage_considerations", "content": ["string"] },
+    { "type": "failure_scenarios", "content": ["string"] },
+    { "type": "failure_handling", "content": ["string"] },
+    { "type": "degraded_behavior_and_fallbacks", "content": ["string"] },
+    { "type": "scaling_read_traffic", "content": ["string"] },
+    { "type": "scaling_write_traffic", "content": ["string"] },
+    { "type": "trade_offs_in_design_decisions and solutions along with trade-offs", "content": ["string"] },
+    { "type": "very_large_scale_changes", "content": ["string"] }
   ]
 }
 
 CONTENT RULES:
 - Each bullet is a separate string in the content array
 - Do not include "-" in content strings
-- diagram_flow content must be arrow chains only
-- code must be complete, production-ready Go
+- Use complete sentences that are easy to read aloud
 
 REQUIRED SECTIONS (EXACT ORDER):
-- short_answer
-- diagram_flow
-- high_level_design
-- detailed_design
-- technology_choices
-- api_contracts
-- data_models
-- algorithms
-- code
-- bottlenecks_and_mitigations
-- alternative_approaches
-- trade_offs
-- scalability
-- considerations
+- problem_statement
+- functional_requirements
+- short_answer_high_level_architecture
+- high_level_architecture_overview
+- main_components_and_responsibilities
+- high_level_data_flow
+- primary_write_flow
+- primary_read_flow
+- background_or_asynchronous_flow
+- caching_strategy
+- load_balancing_strategy
+- data_model_overview
+- database_design
+- indexing_strategy_and_reason
+- data_growth_and_storage_considerations
+- failure_scenarios
+- failure_handling
+- degraded_behavior_and_fallbacks
+- scaling_read_traffic
+- scaling_write_traffic
+- trade_offs_in_design_decisions and solutions along with trade-offs
+- very_large_scale_changes
+
+Do not include Phase 8 code unless explicitly asked.
 ''';
   }
 
@@ -220,57 +221,198 @@ Remember: This is a normal interview - give complete, thoughtful answers that de
   }
 
   static String _getSystemDesignPrompt() {
-    return '''
-You are answering a SYSTEM DESIGN INTERVIEW as a SENIOR SOFTWARE ENGINEER (7+ years).
-PRIMARY LANGUAGE: Golang (Go).
-''';
+    return buildSystemDesignBasePrompt();
   }
 
   static String _getSystemDesignPhaseRules(int phase) {
     switch (phase) {
       case 1:
         return '''
-Required sections (exact order):
-- short_answer
-- diagram_flow
-Do not include any other sections.
-Start output immediately.
+PHASE 1 — PROBLEM UNDERSTANDING
+
+Explain the problem in a way that is easy to understand and speak out loud.
+
+Sections required:
+- problem_statement
+- functional_requirements
+- short_answer_high_level_architecture
+
+Guidelines:
+- No technologies yet
+- Explain what the system must do and what it must not do
 ''';
       case 2:
         return '''
-Using the previous Phase 1 output as context, generate PHASE 2 only.
-Required sections:
-- high_level_design
-- detailed_design
-- technology_choices
-Do not repeat Phase 1.
+PHASE 2 — HIGH-LEVEL DESIGN
+
+Using Phase 1 as context.
+
+Sections required:
+- high_level_architecture_overview
+- main_components_and_responsibilities
+- high_level_data_flow_sudo_code
+
+Guidelines:
+- Explain each component in simple words
+- Describe how requests move through the system
+- Avoid low-level implementation details
 ''';
       case 3:
         return '''
-Using Phase 1 and Phase 2 as context, generate PHASE 3 only.
-Required sections:
-- api_contracts
-- data_models
-- algorithms
-- code
-All code must be fully implemented in Go.
+PHASE 3 — CORE SYSTEM FLOWS
+
+Using previous phases as context.
+
+Sections required:
+- primary_write_flow
+- primary_read_flow
+- background_or_asynchronous_flow
+
+Guidelines:
+- Explain each step clearly
+- Describe why each step is needed
+- No abbreviations
 ''';
       case 4:
         return '''
-Using all previous phases as context, generate PHASE 4 only.
-Required sections:
-- bottlenecks_and_mitigations
-- alternative_approaches
-- trade_offs
-- scalability
-- considerations
+PHASE 4 — CACHING AND LOAD BALANCING
+
+Using previous phases as context.
+
+Sections required:
+- caching_strategy
+- load_balancing_strategy
+
+Guidelines:
+- Explain concepts before details
+- Focus on impact on performance and reliability
+''';
+      case 5:
+        return '''
+PHASE 5 — DATA STORAGE AND DESIGN
+
+Using previous phases as context.
+
+Sections required:
+- data_model_overview
+- database_design
+- indexing_strategy_and_reason
+- data_growth_and_storage_considerations
+
+Guidelines:
+- Explain why the data is structured this way
+- Avoid vendor-specific details unless necessary
+''';
+      case 6:
+        return '''
+PHASE 6 — FAILURE HANDLING AND RELIABILITY
+
+Using previous phases as context.
+
+Sections required:
+- failure_scenarios
+- failure_handling
+- degraded_behavior_and_fallbacks
+
+Guidelines:
+- Focus on user impact
+- Explain how the system remains usable
+''';
+      case 7:
+        return '''
+PHASE 7 — SCALABILITY AND TRADE-OFFS
+
+Using previous phases as context.
+
+Sections required:
+- scaling_read_traffic
+- scaling_write_traffic
+- trade_offs_in_design_decisions and solutions along with trade-offs
+- very_large_scale_changes
+
+Guidelines:
+- Explain decisions in plain language
+- Show reasoning, not memorization
+''';
+      case 8:
+        return '''
+PHASE 8 — OPTIONAL CODE
+
+Only generate this phase if explicitly asked by the interviewer.
+
+Sections required:
+- data_models
+- core_business_logic
+
+Guidelines:
+- Prioritize clarity over optimization
+- Explain the code in simple terms
 ''';
       default:
         return '''
-Required sections (exact order):
-- short_answer
-- diagram_flow
-Do not include any other sections.
+PHASE 1 — PROBLEM UNDERSTANDING
+
+Explain the problem in a way that is easy to understand and speak out loud.
+
+Sections required:
+- problem_statement
+- functional_requirements
+- non_functional_requirements
+
+Guidelines:
+- No abbreviations
+- No technologies yet
+- Explain what the system must do and what it must not do
+''';
+    }
+  }
+
+  static String _getSystemDesignPhaseSchema(int phase) {
+    switch (phase) {
+      case 1:
+        return '''
+    { "type": "problem_statement", "content": ["string"] },
+    { "type": "functional_requirements", "content": ["string"] },
+    { "type": "short_answer_high_level_architecture", "content": ["string"] },
+''';
+      case 2:
+        return '''
+    { "type": "high_level_architecture_overview", "content": ["string"] },
+    { "type": "main_components_and_responsibilities", "content": ["string"] },
+    { "type": "high_level_data_flow", "content": ["string"] }
+''';
+      case 3:
+        return '''
+    { "type": "primary_write_flow", "content": ["string"] },
+    { "type": "primary_read_flow", "content": ["string"] },
+    { "type": "background_or_asynchronous_flow", "content": ["string"] }
+''';
+      case 4:
+        return '''
+    { "type": "caching_strategy", "content": ["string"] },
+    { "type": "load_balancing_strategy", "content": ["string"] }
+''';
+      case 5:
+        return '''
+    { "type": "database_design", "content": ["string"] },
+''';
+      case 6:
+        return '''
+    { "type": "scaling_read_traffic", "content": ["string"] },
+    { "type": "scaling_write_traffic", "content": ["string"] },
+    { "type": "trade_offs_in_design_decisions and solutions along with trade-offs", "content": ["string"] },
+    { "type": "very_large_scale_changes", "content": ["string"] }
+''';
+      case 7:
+        return '''
+    { "type": "data_models", "content": ["string"] },
+    { "type": "core_business_logic", "content": ["string"] }
+''';
+      default:
+        return '''
+    { "type": "problem_statement", "content": ["string"] },
+    { "type": "functional_requirements", "content": ["string"] },
+    { "type": "non_functional_requirements", "content": ["string"] }
 ''';
     }
   }
