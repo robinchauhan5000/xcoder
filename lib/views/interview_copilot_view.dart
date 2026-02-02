@@ -24,6 +24,7 @@ class InterviewCopilotView extends StatefulWidget {
 
 class _InterviewCopilotViewState extends State<InterviewCopilotView> {
   final _inputController = TextEditingController();
+  final _keyboardFocusNode = FocusNode();
   final List<ChatMessage> _messages = [];
   late InterviewService _interviewService;
   late SpeechService _speechService;
@@ -33,6 +34,7 @@ class _InterviewCopilotViewState extends State<InterviewCopilotView> {
   StreamingInterviewResponse? _latestStreamingResponse;
   bool _isHeaderMicListening = false;
   bool _isInputMicListening = false;
+  bool _pendingHeaderVoiceSend = false;
   bool _useStreaming = true; // Enable streaming by default
   AIProvider _currentProvider = AIProvider.openai;
   InterviewCategory _currentCategory = InterviewCategory.normal;
@@ -117,6 +119,7 @@ class _InterviewCopilotViewState extends State<InterviewCopilotView> {
   @override
   void dispose() {
     _inputController.dispose();
+    _keyboardFocusNode.dispose();
     _speechService.dispose();
     _streamSubscription?.cancel();
     _streamController?.close();
@@ -278,13 +281,15 @@ class _InterviewCopilotViewState extends State<InterviewCopilotView> {
       setState(() => _isHeaderMicListening = true);
       await _speechService.startListening(
         onResult: (text) {
-          setState(() => _isHeaderMicListening = false);
+          setState(() {
+            _isHeaderMicListening = false;
+          });
           if (text.isNotEmpty) {
             _sendMessage(text);
           }
         },
         onPartialResult: (text) {
-          // Show partial results in a temporary message
+          // Show partial results
           debugPrint('Partial: $text');
         },
       );
@@ -325,6 +330,31 @@ class _InterviewCopilotViewState extends State<InterviewCopilotView> {
         },
       );
     }
+  }
+
+  Future<void> _startHeaderMicHold() async {
+    if (_isLoading || _isHeaderMicListening || _isInputMicListening) return;
+    _pendingHeaderVoiceSend = false;
+    setState(() => _isHeaderMicListening = true);
+    await _speechService.startListening(
+      onResult: (text) {
+        if (_pendingHeaderVoiceSend && text.trim().isNotEmpty) {
+          _pendingHeaderVoiceSend = false;
+          _sendMessage(text);
+        }
+      },
+      onPartialResult: (text) {
+        // Show partial results
+        debugPrint('Partial: $text');
+      },
+    );
+  }
+
+  Future<void> _stopHeaderMicHold() async {
+    if (!_isHeaderMicListening) return;
+    _pendingHeaderVoiceSend = true;
+    await _speechService.stopListening();
+    setState(() => _isHeaderMicListening = false);
   }
 
   ChatMessage _buildResponseMessage(InterviewResponse response) {
@@ -386,81 +416,107 @@ class _InterviewCopilotViewState extends State<InterviewCopilotView> {
   Widget build(BuildContext context) {
     return Theme(
       data: AppTheme.dark,
-      child: Container(
-        decoration: const BoxDecoration(color: Colors.transparent),
-        child: Column(
-          children: [
-            InterviewCopilotHeader(
-              isMicListening: _isHeaderMicListening,
-              onMicPressed: _toggleHeaderMic,
-              onAnalysePressed: () {},
-              onClearPressed: () {
-                setState(() {
-                  _messages.clear();
-                });
-              },
-              onCopyAllPressed: _copyAllMessages,
-            ),
-            _buildProviderSelector(),
-            InterviewCopilotChatArea(
-              sessionStartTime: '10:30 AM',
-              messages: _messages,
-            ),
-            if (_isLoading)
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const CircularProgressIndicator(
-                      color: AppColors.accentPurple,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Asking ${_currentProvider.name.toUpperCase()}...',
-                      style: const TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 12,
+      child: RawKeyboardListener(
+        focusNode: _keyboardFocusNode,
+        autofocus: true,
+        onKey: (event) {
+          // Handle Shift key to stop streaming
+          final isShiftKey =
+              event.logicalKey == LogicalKeyboardKey.shiftLeft ||
+              event.logicalKey == LogicalKeyboardKey.shiftRight;
+          if (isShiftKey && event is RawKeyDownEvent) {
+            _stopStreaming();
+            return;
+          }
+
+          // Handle Command key for voice input
+          final isCommandKey =
+              event.logicalKey == LogicalKeyboardKey.metaLeft ||
+              event.logicalKey == LogicalKeyboardKey.metaRight;
+          if (!isCommandKey) return;
+
+          if (event is RawKeyDownEvent) {
+            _startHeaderMicHold();
+          } else if (event is RawKeyUpEvent) {
+            _stopHeaderMicHold();
+          }
+        },
+        child: Container(
+          decoration: const BoxDecoration(color: Colors.transparent),
+          child: Column(
+            children: [
+              InterviewCopilotHeader(
+                isMicListening: _isHeaderMicListening,
+                onMicPressed: _toggleHeaderMic,
+                onAnalysePressed: () {},
+                onClearPressed: () {
+                  setState(() {
+                    _messages.clear();
+                  });
+                },
+                onCopyAllPressed: _copyAllMessages,
+              ),
+              _buildProviderSelector(),
+              InterviewCopilotChatArea(
+                sessionStartTime: '10:30 AM',
+                messages: _messages,
+              ),
+              if (_isLoading)
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(
+                        color: AppColors.accentPurple,
                       ),
-                    ),
-                    if (_useStreaming) ...[
                       const SizedBox(width: 12),
-                      TextButton(
-                        onPressed: _stopStreaming,
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          backgroundColor: Colors.redAccent,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
+                      Text(
+                        'Asking ${_currentProvider.name.toUpperCase()}...',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (_useStreaming) ...[
+                        const SizedBox(width: 12),
+                        TextButton(
+                          onPressed: _stopStreaming,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: Colors.redAccent,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                          ),
+                          child: const Text(
+                            'Stop streaming',
+                            style: TextStyle(fontSize: 12),
                           ),
                         ),
-                        child: const Text(
-                          'Stop streaming',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
+              InterviewCopilotInputBar(
+                controller: _inputController,
+                placeholder: 'Ask for a hint, custom response, or pivot...',
+                isMicListening: _isInputMicListening,
+                onMicPressed: _toggleInputMic,
+                onClearPressed: () {
+                  setState(() {
+                    _inputController.clear();
+                  });
+                },
+                onSendPressed: () {
+                  final text = _inputController.text;
+                  _sendMessage(text);
+                },
+                onAttachmentPressed: () {},
               ),
-            InterviewCopilotInputBar(
-              controller: _inputController,
-              placeholder: 'Ask for a hint, custom response, or pivot...',
-              isMicListening: _isInputMicListening,
-              onMicPressed: _toggleInputMic,
-              onClearPressed: () {
-                setState(() {
-                  _inputController.clear();
-                });
-              },
-              onSendPressed: () {
-                final text = _inputController.text;
-                _sendMessage(text);
-              },
-              onAttachmentPressed: () {},
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
